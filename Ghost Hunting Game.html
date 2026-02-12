@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ghost Hunter: Funny Arcade Edition</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+    
+    <style>
+        :root {
+            --bg-color: #1a0b2e; /* Slightly lighter purple for cartoon vibe */
+            --accent-color: #ff00cc; /* Hot pink */
+            --ghost-color: #00ffff; /* Cyan */
+            --demon-color: #ffaa00; /* Orange */
+            --ui-bg: rgba(255, 255, 255, 0.1);
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: white;
+            font-family: 'Verdana', sans-serif; /* More cartoony font */
+            overflow: hidden;
+            height: 100vh;
+            user-select: none;
+        }
+
+        /* Scanline Effect (Lighter) */
+        .scanlines {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(
+                to bottom,
+                rgba(255,255,255,0),
+                rgba(255,255,255,0) 50%,
+                rgba(0,0,0,0.1) 50%,
+                rgba(0,0,0,0.1)
+            );
+            background-size: 100% 4px;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        #game-board {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            background-image: radial-gradient(circle at center, #432c7a 0%, #1a0b2e 100%);
+            cursor: crosshair;
+            overflow: hidden;
+        }
+
+        .hud-panel {
+            background: var(--ui-bg);
+            border: 3px solid var(--accent-color);
+            border-radius: 15px; /* Rounder corners */
+            padding: 10px 20px;
+            box-shadow: 0 0 10px var(--accent-color);
+            margin: 10px;
+            z-index: 20;
+            position: relative;
+        }
+
+        .stat-label {
+            font-size: 0.8rem;
+            color: #ffccff;
+            text-transform: uppercase;
+            font-weight: bold;
+            letter-spacing: 1px;
+        }
+
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: 900;
+            color: #fff;
+            text-shadow: 2px 2px 0px #000;
+        }
+
+        .progress {
+            background-color: #000;
+            height: 30px;
+            border-radius: 15px;
+            margin-top: 5px;
+            border: 2px solid white;
+            overflow: hidden;
+        }
+        
+        .progress-bar.sanity-bar {
+            background-color: #00ff00;
+            transition: width 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); /* Bouncy transition */
+            background-image: repeating-linear-gradient(
+                45deg,
+                rgba(255, 255, 255, 0.15),
+                rgba(255, 255, 255, 0.15) 10px,
+                transparent 10px,
+                transparent 20px
+            );
+        }
+
+        .entity {
+            position: absolute;
+            font-size: 3.5rem;
+            cursor: pointer;
+            filter: drop-shadow(4px 4px 0px rgba(0,0,0,0.5));
+            transition: transform 0.1s;
+            animation: bounce 2s infinite;
+            touch-action: manipulation;
+        }
+
+        .entity:active {
+            transform: scale(0.8) rotate(10deg);
+        }
+
+        .ghost {
+            color: var(--ghost-color);
+        }
+
+        .demon {
+            color: var(--demon-color);
+            animation: wiggle 0.5s infinite; /* Wiggle instead of shake */
+        }
+
+        /* Cartoon Animations */
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-20px); }
+        }
+
+        @keyframes wiggle {
+            0%, 100% { transform: rotate(-5deg); }
+            50% { transform: rotate(5deg); }
+        }
+
+        @keyframes popIn {
+            0% { transform: scale(0) rotate(-180deg); opacity: 0; }
+            70% { transform: scale(1.2) rotate(10deg); opacity: 1; }
+            100% { transform: scale(1) rotate(0deg); }
+        }
+
+        @keyframes poof {
+            0% { transform: scale(1); opacity: 1; }
+            100% { transform: scale(2); opacity: 0; }
+        }
+
+        .pop-in {
+            animation: popIn 0.4s ease-out forwards;
+        }
+
+        .captured {
+            animation: poof 0.2s ease-out forwards;
+        }
+
+        /* Flash Effect */
+        #flash-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: yellow; /* Yellow flash for funny damage */
+            opacity: 0;
+            pointer-events: none;
+            z-index: 30;
+            transition: opacity 0.1s;
+            mix-blend-mode: overlay;
+        }
+
+        .float-text {
+            position: absolute;
+            color: #fff;
+            font-weight: 900;
+            font-size: 1.5rem;
+            pointer-events: none;
+            animation: floatUp 0.8s ease-out forwards;
+            z-index: 25;
+            text-shadow: 3px 3px 0 #000;
+            font-style: italic;
+        }
+
+        @keyframes floatUp {
+            0% { transform: translateY(0) scale(0.5); opacity: 0; }
+            20% { transform: translateY(-10px) scale(1.2); opacity: 1; }
+            100% { transform: translateY(-60px) scale(1); opacity: 0; }
+        }
+
+        .overlay-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 50;
+            backdrop-filter: blur(2px);
+        }
+
+        .game-title {
+            font-size: 4.5rem;
+            text-shadow: 4px 4px 0 var(--accent-color), -2px -2px 0 #00ffff;
+            margin-bottom: 20px;
+            text-align: center;
+            font-weight: 900;
+            animation: float 3s ease-in-out infinite;
+        }
+
+        @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+
+        .btn-game {
+            background: var(--accent-color);
+            border: 4px solid #fff;
+            color: white;
+            padding: 15px 40px;
+            font-size: 1.8rem;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            transition: transform 0.1s;
+            box-shadow: 6px 6px 0px #000;
+            border-radius: 10px;
+            margin-top: 20px;
+        }
+
+        .btn-game:hover {
+            transform: translate(-2px, -2px);
+            box-shadow: 8px 8px 0px #000;
+            color: #fff;
+        }
+
+        .btn-game:active {
+            transform: translate(2px, 2px);
+            box-shadow: 0px 0px 0px #000;
+        }
+
+        .btn-sound {
+            background: #fff;
+            border: 3px solid #000;
+            color: #000;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 1.2rem;
+            box-shadow: 3px 3px 0 rgba(0,0,0,0.5);
+        }
+
+        .hidden { display: none !important; }
+
+    </style>
+</head>
+<body>
+
+    <div class="scanlines"></div>
+    <div id="flash-overlay"></div>
+
+    <!-- UI: HUD -->
+    <div class="container-fluid position-absolute top-0 start-0 w-100" style="z-index: 20;">
+        <div class="row justify-content-between align-items-start">
+            <div class="col-auto">
+                <div class="d-flex align-items-center gap-2">
+                    <button id="mute-btn" class="btn-sound" title="Toggle Sound">
+                        <i class="bi bi-volume-up-fill"></i>
+                    </button>
+                    <div class="hud-panel d-inline-block">
+                        <div class="stat-label">Score</div>
+                        <div class="stat-value" id="score-display">0</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-auto">
+                <div class="hud-panel d-inline-block text-end" style="min-width: 200px;">
+                    <div class="d-flex justify-content-between">
+                        <div class="stat-label">Fun Level</div>
+                        <div class="stat-label" id="sanity-text">100%</div>
+                    </div>
+                    <div class="progress" role="progressbar">
+                        <div class="progress-bar sanity-bar" id="sanity-bar" style="width: 100%;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Game Board -->
+    <main id="game-board"></main>
+
+    <!-- Start Screen -->
+    <section id="start-screen" class="overlay-screen">
+        <h1 class="game-title text-white">GHOST<br>BUSTERS!</h1>
+        <div class="text-center mx-4" style="max-width: 600px;">
+            <p class="lead text-info">Sound effects: CARTOON MODE ON</p>
+            <div class="row text-start mb-4 bg-dark bg-opacity-50 p-3 rounded border border-3 border-info">
+                <div class="col-12 mb-2 fs-5"><i class="bi bi-ghost text-info"></i> <strong>Click Ghosts:</strong> Get points!</div>
+                <div class="col-12 mb-2 fs-5"><i class="bi bi-emoji-dizzy text-warning"></i> <strong>Avoid Demons:</strong> They make funny noises!</div>
+            </div>
+        </div>
+        <button class="btn btn-game" id="start-btn">PLAY!</button>
+    </section>
+
+    <!-- Game Over Screen -->
+    <section id="game-over-screen" class="overlay-screen hidden">
+        <h1 class="game-title" style="color: #ffaa00;">OH NO!</h1>
+        <div class="display-3 mb-3 fw-bold">Score: <span id="final-score" class="text-white">0</span></div>
+        <p class="lead text-light">Game Over, Dude.</p>
+        <button class="btn btn-game" id="restart-btn">TRY AGAIN</button>
+    </section>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        /**
+         * FUNNY SOUND ENGINE
+         * Generates cartoonish arcade sounds using oscillators.
+         */
+        const SoundEngine = {
+            ctx: null,
+            masterGain: null,
+            isMuted: false,
+            droneNode: null,
+
+            init() {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                this.ctx = new AudioContext();
+                this.masterGain = this.ctx.createGain();
+                this.masterGain.gain.value = 0.4; // Slightly louder for fun
+                this.masterGain.connect(this.ctx.destination);
+            },
+
+            resume() {
+                if (this.ctx && this.ctx.state === 'suspended') {
+                    this.ctx.resume();
+                }
+            },
+
+            toggleMute() {
+                this.isMuted = !this.isMuted;
+                if(this.masterGain) {
+                    this.masterGain.gain.setValueAtTime(this.isMuted ? 0 : 0.4, this.ctx.currentTime);
+                }
+                return this.isMuted;
+            },
+
+            // 1. Funny Ambience (Faint Carousel/Circus Bass)
+            startAmbience() {
+                if (!this.ctx) return;
+                
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                
+                osc.type = 'triangle';
+                osc.frequency.value = 65; // Low C (C2)
+                
+                // LFO to pulse the bass
+                const lfo = this.ctx.createOscillator();
+                lfo.type = 'square';
+                lfo.frequency.value = 0.5; // Two beats per second
+                
+                const lfoGain = this.ctx.createGain();
+                lfoGain.gain.value = 0.1;
+                
+                // Filter to muffle it
+                const filter = this.ctx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.value = 200;
+
+                lfo.connect(lfoGain.gain);
+                
+                gain.gain.value = 0.1;
+                
+                osc.connect(gain);
+                gain.connect(filter);
+                filter.connect(this.masterGain);
+                
+                osc.start();
+                lfo.start();
+
+                this.droneNode = { stop: () => { osc.stop(); lfo.stop(); } };
+            },
+
+            stopAmbience() {
+                if (this.droneNode) {
+                    this.droneNode.stop();
+                    this.droneNode = null;
+                }
+            },
+
+            // 2. Spawn Sound (Boing / Pop)
+            playSpawn() {
+                if (this.isMuted || !this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                
+                osc.type = 'triangle';
+                
+                // Frequency jumps up quickly (The "Boing")
+                osc.frequency.setValueAtTime(200, this.ctx.currentTime);
+                osc.frequency.linearRampToValueAtTime(600, this.ctx.currentTime + 0.1);
+                
+                gain.gain.setValueAtTime(0, this.ctx.currentTime);
+                gain.gain.linearRampToValueAtTime(0.2, this.ctx.currentTime + 0.05);
+                gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.2);
+                
+                osc.connect(gain);
+                gain.connect(this.masterGain);
+                
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.2);
+            },
+
+            // 3. Capture Sound (8-bit Coin / Zing)
+            playCapture() {
+                if (this.isMuted || !this.ctx) return;
+                
+                const t = this.ctx.currentTime;
+                
+                // First "Ding"
+                const osc1 = this.ctx.createOscillator();
+                const gain1 = this.ctx.createGain();
+                osc1.type = 'square';
+                osc1.frequency.setValueAtTime(1200, t); // High E
+                gain1.gain.setValueAtTime(0.05, t);
+                gain1.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+                osc1.connect(gain1);
+                gain1.connect(this.masterGain);
+                osc1.start(t);
+                osc1.stop(t + 0.1);
+
+                // Second "Ding" (Higher)
+                const osc2 = this.ctx.createOscillator();
+                const gain2 = this.ctx.createGain();
+                osc2.type = 'square';
+                osc2.frequency.setValueAtTime(1800, t + 0.08); // High A
+                gain2.gain.setValueAtTime(0.05, t + 0.08);
+                gain2.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+                osc2.connect(gain2);
+                gain2.connect(this.masterGain);
+                osc2.start(t + 0.08);
+                osc2.stop(t + 0.2);
+            },
+
+            // 4. Damage Sound (Slide Whistle Down - Womp Womp)
+            playDamage() {
+                if (this.isMuted || !this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+
+                osc.type = 'triangle'; // "Hollow" sound
+                
+                // Big slide down from high to low
+                osc.frequency.setValueAtTime(800, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(100, this.ctx.currentTime + 0.4);
+
+                gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
+                gain.gain.linearRampToValueAtTime(0, this.ctx.currentTime + 0.4);
+
+                osc.connect(gain);
+                gain.connect(this.masterGain);
+                
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.4);
+            },
+
+            // 5. Game Over (Sad Trombone)
+            playGameOver() {
+                if (this.isMuted || !this.ctx) return;
+                const t = this.ctx.currentTime;
+                const notes = [261.63, 246.94, 233.08, 196.00]; // C4, B3, Bb3, G3 (Sad)
+                
+                notes.forEach((freq, index) => {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    
+                    osc.type = 'sawtooth'; // Brass-like
+                    
+                    // Muffle the brass
+                    const filter = this.ctx.createBiquadFilter();
+                    filter.type = 'lowpass';
+                    filter.frequency.value = 1000;
+
+                    osc.frequency.value = freq;
+                    
+                    const time = t + (index * 0.25); // Quarter notes
+                    
+                    gain.gain.setValueAtTime(0.1, time);
+                    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.3);
+                    
+                    osc.connect(gain);
+                    gain.connect(filter);
+                    filter.connect(this.masterGain);
+                    
+                    osc.start(time);
+                    osc.stop(time + 0.35);
+                });
+            }
+        };
+
+        // --- Game Config ---
+        const CONFIG = {
+            initialSanity: 100,
+            sanityDrainRate: 0.08,
+            demonDamage: 25,
+            spawnRateInitial: 1000,
+            spawnRateMin: 400,
+            difficultyRamp: 0.98,
+            entityTypes: [
+                { type: 'ghost', icon: '<i class="bi bi-ghost"></i>', score: 10, speed: 3000, weight: 0.6 },
+                { type: 'ghost', icon: '<i class="bi bi-robot"></i>', score: 20, speed: 2500, weight: 0.3 },
+                { type: 'demon', icon: '<i class="bi bi-emoji-dizzy"></i>', score: 0, speed: 4000, weight: 0.1 }
+            ]
+        };
+
+        // --- State ---
+        let score = 0;
+        let sanity = CONFIG.initialSanity;
+        let gameActive = false;
+        let spawnTimer = null;
+        let sanityTimer = null;
+        let currentSpawnRate = CONFIG.spawnRateInitial;
+
+        // --- DOM ---
+        const gameBoard = document.getElementById('game-board');
+        const scoreDisplay = document.getElementById('score-display');
+        const sanityBar = document.getElementById('sanity-bar');
+        const sanityText = document.getElementById('sanity-text');
+        const startScreen = document.getElementById('start-screen');
+        const gameOverScreen = document.getElementById('game-over-screen');
+        const finalScoreDisplay = document.getElementById('final-score');
+        const flashOverlay = document.getElementById('flash-overlay');
+        const muteBtn = document.getElementById('mute-btn');
+
+        // --- Events ---
+        document.getElementById('start-btn').addEventListener('click', startGame);
+        document.getElementById('restart-btn').addEventListener('click', startGame);
+        
+        muteBtn.addEventListener('click', () => {
+            const isMuted = SoundEngine.toggleMute();
+            muteBtn.innerHTML = isMuted ? '<i class="bi bi-volume-mute-fill"></i>' : '<i class="bi bi-volume-up-fill"></i>';
+        });
+
+        function startGame() {
+            if (!SoundEngine.ctx) SoundEngine.init();
+            SoundEngine.resume();
+            
+            score = 0;
+            sanity = CONFIG.initialSanity;
+            currentSpawnRate = CONFIG.spawnRateInitial;
+            gameActive = true;
+
+            updateUI();
+            gameBoard.innerHTML = '';
+            startScreen.classList.add('hidden');
+            gameOverScreen.classList.add('hidden');
+
+            sanityTimer = setInterval(gameLoop, 50);
+            SoundEngine.startAmbience();
+            spawnLoop();
+        }
+
+        function gameOver() {
+            gameActive = false;
+            clearInterval(sanityTimer);
+            clearTimeout(spawnTimer);
+            
+            document.querySelectorAll('.entity').forEach(el => el.remove());
+            
+            SoundEngine.stopAmbience();
+            SoundEngine.playGameOver();
+            
+            finalScoreDisplay.textContent = score;
+            gameOverScreen.classList.remove('hidden');
+        }
+
+        function spawnLoop() {
+            if (!gameActive) return;
+
+            spawnEntity();
+
+            if (currentSpawnRate > CONFIG.spawnRateMin) {
+                currentSpawnRate *= CONFIG.difficultyRamp;
+            }
+
+            spawnTimer = setTimeout(spawnLoop, currentSpawnRate);
+        }
+
+        function gameLoop() {
+            if (!gameActive) return;
+            modifySanity(-CONFIG.sanityDrainRate);
+        }
+
+        function spawnEntity() {
+            const entityType = getRandomEntityType();
+            const element = document.createElement('div');
+            
+            element.classList.add('entity', 'pop-in');
+            
+            if (entityType.type === 'demon') {
+                element.classList.add('demon');
+            } else {
+                element.classList.add('ghost');
+            }
+
+            element.innerHTML = entityType.icon;
+            
+            const padding = 60;
+            const maxX = gameBoard.clientWidth - padding;
+            const maxY = gameBoard.clientHeight - padding;
+            const x = Math.random() * (maxX - padding) + (padding / 2);
+            const y = Math.random() * (maxY - padding) + (padding / 2);
+
+            element.style.left = `${x}px`;
+            element.style.top = `${y}px`;
+
+            SoundEngine.playSpawn();
+
+            element.onmousedown = (e) => handleEntityClick(e, element, entityType);
+            element.ontouchstart = (e) => {
+                e.preventDefault();
+                handleEntityClick(e.touches[0], element, entityType);
+            };
+
+            gameBoard.appendChild(element);
+
+            const disappearTimer = setTimeout(() => {
+                if (element.parentNode && gameActive) {
+                    element.remove();
+                }
+            }, entityType.speed);
+            
+            element.dataset.timerId = disappearTimer;
+        }
+
+        function getRandomEntityType() {
+            const rand = Math.random();
+            let accumulatedWeight = 0;
+            
+            for (let type of CONFIG.entityTypes) {
+                accumulatedWeight += type.weight;
+                if (rand <= accumulatedWeight) {
+                    return type;
+                }
+            }
+            return CONFIG.entityTypes[0];
+        }
+
+        function handleEntityClick(event, element, typeData) {
+            if (!gameActive || element.classList.contains('captured')) return;
+
+            clearTimeout(element.dataset.timerId);
+            element.classList.add('captured');
+
+            const floatX = event.clientX;
+            const floatY = event.clientY;
+
+            if (typeData.type === 'demon') {
+                modifySanity(-CONFIG.demonDamage);
+                showFloatingText(floatX, floatY, `Ouch!`, '#ffaa00'); // Funny text
+                triggerDamageEffect();
+                SoundEngine.playDamage();
+            } else {
+                score += typeData.score;
+                showFloatingText(floatX, floatY, `+${typeData.score}`, '#00ffff');
+                SoundEngine.playCapture();
+            }
+
+            updateUI();
+
+            setTimeout(() => {
+                if (element.parentNode) element.remove();
+            }, 200);
+        }
+
+        // --- Helpers ---
+        function modifySanity(amount) {
+            sanity += amount;
+            if (sanity > 100) sanity = 100;
+            if (sanity <= 0) {
+                sanity = 0;
+                gameOver();
+            }
+            updateUI();
+        }
+
+        function updateUI() {
+            scoreDisplay.textContent = score;
+            sanityBar.style.width = `${sanity}%`;
+            sanityText.textContent = `${Math.ceil(sanity)}%`;
+
+            if (sanity > 60) {
+                sanityBar.style.backgroundColor = '#00ff00';
+            } else if (sanity > 30) {
+                sanityBar.style.backgroundColor = '#ffff00'; // Yellow warning
+            } else {
+                sanityBar.style.backgroundColor = '#ff0000'; // Red danger
+            }
+        }
+
+        function showFloatingText(x, y, text, color) {
+            const el = document.createElement('div');
+            el.classList.add('float-text');
+            el.textContent = text;
+            el.style.left = `${x}px`;
+            el.style.top = `${y}px`;
+            el.style.color = color;
+            document.body.appendChild(el);
+
+            setTimeout(() => el.remove(), 1000);
+        }
+
+        function triggerDamageEffect() {
+            // Yellow flash for cartoon "shock"
+            flashOverlay.style.backgroundColor = 'yellow';
+            flashOverlay.style.opacity = '0.5';
+            
+            setTimeout(() => {
+                flashOverlay.style.opacity = '0';
+            }, 100);
+
+            // Bouncy shake
+            gameBoard.style.transform = 'translate(5px, 5px)';
+            setTimeout(() => {
+                gameBoard.style.transform = 'translate(-5px, -5px)';
+                setTimeout(() => {
+                    gameBoard.style.transform = 'translate(0, 0)';
+                }, 50);
+            }, 50);
+        }
+
+    </script>
+</body>
+</html>
